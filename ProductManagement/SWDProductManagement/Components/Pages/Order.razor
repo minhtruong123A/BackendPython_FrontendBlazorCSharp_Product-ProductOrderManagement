@@ -1,0 +1,342 @@
+﻿@page "/order"
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Order</PageTitle>
+
+<h1>Order Management</h1>
+<h5>List All Data Of Orders</h5>
+
+<div id="orders-container">
+    Order List Loading.....
+</div>
+
+<div id="pagination-controls"></div>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f0f0f0;
+        color: #333;
+    }
+
+    h1, h5 {
+        text-align: center;
+    }
+
+    #orders-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        max-width: 1200px;
+        margin: 20px auto;
+    }
+
+    .date-group {
+        width: 100%;
+        margin-bottom: 20px;
+    }
+
+        .date-group h2, .date-group h3, .date-group h4 {
+            text-align: left;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #ccc;
+        }
+
+        .date-group h2 {
+            font-size: 1.5em;
+        }
+
+        .date-group h3 {
+            font-size: 1.3em;
+            margin-left: 20px;
+        }
+
+        .date-group h4 {
+            font-size: 1.1em;
+            margin-left: 40px;
+        }
+
+    .order-group {
+        display: flex;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .order-receipt {
+        font-family: 'Courier New', Courier, monospace;
+        width: 280px;
+        margin: 10px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        background-color: #fafafa;
+        border-radius: 8px;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.05);
+    }
+
+    .order-header,
+    .order-item {
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .order-header {
+        font-weight: bold;
+        border-bottom: 1px dashed #ccc;
+        padding-bottom: 5px;
+        margin-bottom: 5px;
+    }
+
+    .order-item {
+        border-bottom: 1px dashed #eee;
+        padding: 5px 0;
+    }
+
+        .order-item:last-child {
+            border-bottom: none;
+        }
+
+    .order-total {
+        display: flex;
+        justify-content: space-between;
+        font-weight: bold;
+        padding-top: 10px;
+    }
+
+    #pagination-controls {
+        text-align: center;
+        margin-top: 20px;
+    }
+
+        #pagination-controls button {
+            margin: 0 5px;
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+            #pagination-controls button:hover,
+            #pagination-controls button.active {
+                background-color: #007bff;
+                color: #fff;
+                border-color: #007bff;
+            }
+
+    .pagination-ellipsis {
+        padding: 5px 10px;
+    }
+</style>
+
+<script>
+    let currentPage = 1;
+    const itemsPerPage = 2; // Adjust this value as needed
+    let groupedOrders = {};
+
+    function fetchOrders() {
+        fetch('http://localhost:8000/api/orders')
+            .then(response => response.json())
+            .then(data => {
+                const orders = data.data;
+
+                if (orders.length === 0) {
+                    document.getElementById('orders-container').innerHTML = 'Order List Load failed';
+                } else {
+                    // Sort orders by date (newest to oldest)
+                    orders.sort((a, b) => new Date(b.CreateDate) - new Date(a.CreateDate));
+
+                    // Group orders by year, month, day, and OrderId
+                    groupedOrders = orders.reduce((acc, order) => {
+                        const date = new Date(order.CreateDate);
+                        const year = date.getFullYear();
+                        const month = date.toLocaleString('default', { month: 'long' });
+                        const day = date.getDate();
+
+                        if (!acc[year]) acc[year] = {};
+                        if (!acc[year][month]) acc[year][month] = {};
+                        if (!acc[year][month][day]) acc[year][month][day] = {};
+                        if (!acc[year][month][day][order.OrderId]) acc[year][month][day][order.OrderId] = [];
+
+                        acc[year][month][day][order.OrderId].push(order);
+                        return acc;
+                    }, {});
+
+                    displayOrders();
+                    setupPagination();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching data:', error);
+                document.getElementById('orders-container').innerHTML = 'Order List Load failed';
+            });
+    }
+
+    function displayOrders() {
+        const ordersContainer = document.getElementById('orders-container');
+        let html = '';
+        let count = 0;
+
+        const sortedYears = Object.keys(groupedOrders).sort((a, b) => b - a);
+        sortedYears.forEach(year => {
+            const sortedMonths = Object.keys(groupedOrders[year]).sort((a, b) => new Date(`${year} ${b}`) - new Date(`${year} ${a}`));
+            sortedMonths.forEach(month => {
+                const sortedDays = Object.keys(groupedOrders[year][month]).sort((a, b) => b - a);
+                sortedDays.forEach(day => {
+                    const ordersByOrderId = groupedOrders[year][month][day];
+
+                    for (const orderId in ordersByOrderId) {
+                        if (count >= (currentPage - 1) * itemsPerPage && count < currentPage * itemsPerPage) {
+                            html += `<div class="date-group"><h2>${year}</h2>`;
+                            html += `<div class="date-group"><h3>${month}</h3>`;
+                            html += `<div class="date-group"><h4>${month} ${day}</h4>`;
+                            html += '<div class="order-group">';
+
+                            // Sort orders by OrderId in descending order
+                            const sortedOrders = ordersByOrderId[orderId].sort((a, b) => b.OrderId - a.OrderId);
+
+                            sortedOrders.forEach(order => {
+                                html += `
+                                        <div class="order-receipt">
+                                            <div class="order-header">
+                                                <div>ID</div><div>${order.Id}</div>
+                                            </div>
+                                            <div class="order-item">
+                                                <div>Order ID:</div><div>${order.OrderId}</div>
+                                            </div>
+                                            <div class="order-item">
+                                                <div>Product ID:</div><div>${order.ProductId}</div>
+                                            </div>
+                                            <div class="order-item">
+                                                <div>Create Date:</div><div>${new Date(order.CreateDate).toLocaleString()}</div>
+                                            </div>
+                                            <div class="order-item">
+                                                <div>Total Price:</div><div>${order.TotalPrice}</div>
+                                            </div>
+                                            <div class="order-item">
+                                                <div>Product Quantity:</div><div>${order.ProductQuantity}</div>
+                                            </div>
+                                            <div class="order-item">
+                                                <div>Product Total Price:</div><div>${order.ProductTotalPrice}</div>
+                                            </div>
+                                            <div class="order-item">
+                                                <div>Product Name:</div><div>${order.ProductName}</div>
+                                            </div>
+                                            <div class="order-item">
+                                                <div>Price:</div><div>${order.Price}</div>
+                                            </div>
+                                        </div>
+                                    `;
+                            });
+
+                            html += '</div></div></div></div>'; // close order-group, day group, month group, and year group
+                        }
+                        count++;
+                    }
+                });
+            });
+        });
+
+        ordersContainer.innerHTML = html;
+    }
+
+    function setupPagination() {
+        const paginationControls = document.getElementById('pagination-controls');
+        paginationControls.innerHTML = '';
+
+        const totalItems = Object.keys(groupedOrders).reduce((acc, year) => {
+            const months = groupedOrders[year];
+            Object.keys(months).forEach(month => {
+                const days = months[month];
+                Object.keys(days).forEach(day => {
+                    const orders = days[day];
+                    acc += Object.keys(orders).length;
+                });
+            });
+            return acc;
+        }, 0);
+
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+        const createButton = (page, text = page, disabled = false, active = false) => {
+            const button = document.createElement('button');
+            button.textContent = text;
+            if (disabled) button.disabled = true;
+            if (active) button.classList.add('active');
+            button.addEventListener('click', () => {
+                currentPage = page;
+                displayOrders();
+                setupPagination();
+            });
+            return button;
+        };
+
+        // Previous and first page buttons
+        paginationControls.appendChild(createButton(1, '«', currentPage === 1));
+        paginationControls.appendChild(createButton(currentPage - 1, '‹', currentPage === 1));
+
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(totalPages, currentPage + Math.floor(maxVisiblePages / 2));
+
+        if (currentPage <= Math.floor(maxVisiblePages / 2)) {
+            endPage = Math.min(totalPages, maxVisiblePages);
+        }
+
+        if (currentPage > totalPages - Math.floor(maxVisiblePages / 2)) {
+            startPage = Math.max(1, totalPages - maxVisiblePages + 1);
+        }
+
+        if (startPage > 1) {
+            paginationControls.appendChild(createButton(1));
+            if (startPage > 2) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                ellipsis.className = 'pagination-ellipsis';
+                paginationControls.appendChild(ellipsis);
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            paginationControls.appendChild(createButton(i, i, false, i === currentPage));
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                ellipsis.className = 'pagination-ellipsis';
+                paginationControls.appendChild(ellipsis);
+            }
+            paginationControls.appendChild(createButton(totalPages));
+        }
+
+        // Next and last page buttons
+        paginationControls.appendChild(createButton(currentPage + 1, '›', currentPage === totalPages));
+        paginationControls.appendChild(createButton(totalPages, '»', currentPage === totalPages));
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        fetchOrders();
+    });
+</script>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("fetchOrders");
+        }
+    }
+}

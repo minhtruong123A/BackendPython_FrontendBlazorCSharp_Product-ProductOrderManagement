@@ -1,0 +1,81 @@
+﻿@page "/"
+
+<PageTitle>Home</PageTitle>
+
+<h1>Hello, world!</h1>
+
+Welcome to your new app.
+
+@if (ErrorMessage != null)
+{
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+
+<div>
+    <button @onclick="FetchData">button list products</button>
+    @foreach (var article in ProductList)
+    {
+        <h2>@article.Id</h2>
+        <h3>Title: @article.ProductName</h3>
+        <p>Completed: @article.Price</p>
+    }
+</div>
+<br />
+<div>
+    <button @onclick="FetchData2">button get 1 product</button>
+    @if (Products != null)
+    {
+        <h3>Title: @Products.ProductName</h3>
+        <p>Completed: @Products.Price</p>
+    }
+</div>
+
+@code {
+    //--------------------------------------------------DECLARE VARIABLE---------------------------------------------
+    public string ErrorMessage { get; set; }
+    public Product Products { get; set; }
+    List<Product> ProductList = new List<Product>();
+
+    string API_1 = "https://yourapi.com/products";
+    string API_2 = "https://yourapi.com/products/1";
+
+    [Inject]
+    public HttpClient HttpClient { get; set; }
+
+    //------------------------------------------------fUNCTION FETCH DATA--------------------------------------------
+    public async Task FetchData()
+    {
+        try
+        {
+            ProductList = await HttpClient.GetFromJsonAsync<List<Product>>(API_1);
+            ErrorMessage = null;
+
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = "An error occurred while fetching the product list.";
+        }
+    }
+
+    public async Task FetchData2()
+    {
+        try
+        {
+            Products = await HttpClient.GetFromJsonAsync<Product>(API_2);
+            ErrorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = "An error occurred while fetching the product.";
+        }
+    }
+
+    //------------------------------------------------SCHEMA CATCH DATA----------------------------------------------
+    public class Product
+    {
+        public int Id { get; set; }
+        public int ProductName { get; set; }
+        public int BrandCategoryId { get; set; }
+        public float Price { get; set; }
+    }
+}
